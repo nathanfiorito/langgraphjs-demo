@@ -129,7 +129,7 @@ function calcularMetricas(estado: Estado): Partial<Estado> {
     { nome: "total_caracteres", valor: estado.texto.length },
   ];
 
-  novasMetricas.forEach((m) => log(`${m.nome}: ${m.valor}`));
+  novasMetricas.forEach((metrica) => log(`${metrica.nome}: ${metrica.valor}`));
 
   return {
     // O reducer de `metricas` vai ACUMULAR esses itens (não sobrescrever)
@@ -144,9 +144,9 @@ function gerarRelatorio(estado: Estado): Partial<Estado> {
   console.log("\n📄 [gerarRelatorio] Gerando relatório...");
 
   // Aqui demonstramos que podemos ler TODO o estado acumulado
-  const palavrasMetrica = estado.metricas.find((m) => m.nome === "palavras");
+  const palavrasMetrica = estado.metricas.find((metrica) => metrica.nome === "palavras");
   const charsMetrica = estado.metricas.find(
-    (m) => m.nome === "caracteres_sem_espaco"
+    (metrica) => metrica.nome === "caracteres_sem_espaco"
   );
 
   log(`Total de métricas disponíveis: ${estado.metricas.length}`);
