@@ -166,7 +166,7 @@ async function supervisor(estado: Estado): Promise<Partial<Estado>> {
         .enum(["analista", "redator", "finalizar"])
         .describe(
           "Próximo agente: 'analista' para análise de dados, " +
-          "'redator' para redigir relatório (após análise), " +
+          "'redator' para redigir relatório (após análise e antes de finalizar), " +
           "'finalizar' quando o trabalho estiver completo"
         ),
       justificativa: z.string().describe("Motivo da decisão"),
@@ -182,8 +182,11 @@ Relatório redigido: ${estado.relatorioRedigido || "Ainda não feito"}
   const decisao = await modeloComEsquema.invoke([
     new SystemMessage(
       "Você é um supervisor que coordena agentes especializados. " +
-      "Avalie o progresso e decida qual agente deve agir a seguir. " +
-      "Sequência típica: analista primeiro, depois redator, depois finalizar."
+      "Siga OBRIGATORIAMENTE esta sequência:\n" +
+      "  1. Se 'Análise realizada' estiver vazia → escolha 'analista'\n" +
+      "  2. Se 'Análise realizada' estiver preenchida e 'Relatório redigido' estiver vazio → escolha 'redator'\n" +
+      "  3. Se ambos estiverem preenchidos → escolha 'finalizar'\n" +
+      "Não pule etapas. O relatório executivo é obrigatório e deve ser produzido pelo redator."
     ),
     new HumanMessage(contexto),
   ]);
@@ -230,6 +233,12 @@ async function analista(estado: Estado): Promise<Partial<Estado>> {
       analiseTexto = resposta.content as string;
       console.log("   ✓ Análise concluída");
       break;
+    }
+
+    // Última iteração: captura o conteúdo mesmo que haja tool_calls
+    // Evita retornar analiseTexto vazio quando o loop se esgota
+    if (i === 4) {
+      analiseTexto = `Análise parcial (máximo de iterações atingido): ${JSON.stringify(resposta.content)}`;
     }
 
     console.log(
@@ -309,8 +318,26 @@ ${estado.decisoesSupervisor.map((d) => `  - ${d}`).join("\n")}
 
 function rotearSupervisor(estado: Estado): ProximoAgente | typeof END {
   const proximo = estado.proximoAgente;
-  if (proximo === "finalizar") return "finalizar";
-  return proximo;
+
+  // ── GUARDRAIL ────────────────────────────────────────────────────────
+  // Nunca confie cegamente na decisão do LLM para fluxos críticos.
+  // Regras determinísticas garantem que a sequência obrigatória seja seguida,
+  // mesmo que o supervisor cometa um erro de raciocínio.
+  if (!estado.analiseRealizada) {
+    if (proximo !== "analista") {
+      console.log(`   ⚠️  Guardrail: supervisor escolheu '${proximo}' sem análise → forçando 'analista'`);
+    }
+    return "analista";
+  }
+
+  if (!estado.relatorioRedigido) {
+    if (proximo === "finalizar") {
+      console.log("   ⚠️  Guardrail: supervisor quis finalizar sem relatório → forçando 'redator'");
+    }
+    return proximo === "analista" ? "analista" : "redator";
+  }
+
+  return proximo === "finalizar" ? "finalizar" : proximo;
 }
 
 // ─────────────────────────────────────────────
