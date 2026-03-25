@@ -1,0 +1,26 @@
+{
+  "name": "langgraphjs-demo",
+  "version": "1.0.0",
+  "description": "Demo didático de LangGraph.js para criação e orquestração de agentes de IA com Claude",
+  "type": "module",
+  "scripts": {
+    "01:basic-graph": "tsx src/01-basic-graph/index.ts",
+    "02:state-management": "tsx src/02-state-management/index.ts",
+    "03:conditional-edges": "tsx src/03-conditional-edges/index.ts",
+    "04:tool-calling": "tsx src/04-tool-calling/index.ts",
+    "05:multi-agent": "tsx src/05-multi-agent/index.ts",
+    "06:human-in-the-loop": "tsx src/06-human-in-the-loop/index.ts"
+  },
+  "dependencies": {
+    "@langchain/anthropic": "^0.3.15",
+    "@langchain/core": "^0.3.40",
+    "@langchain/langgraph": "^0.2.55",
+    "dotenv": "^16.4.7",
+    "zod": "^3.24.2"
+  },
+  "devDependencies": {
+    "@types/node": "^22.13.14",
+    "tsx": "^4.19.3",
+    "typescript": "^5.8.2"
+  }
+}
