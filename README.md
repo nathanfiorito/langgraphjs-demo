@@ -1,6 +1,6 @@
-# LangGraph.js — Estudo de Orquestração de Agentes de IA
+# LangGraph — Estudo de Orquestração de Agentes de IA
 
-Repositório de estudo didático sobre **LangGraph.js**, a principal biblioteca para criação de agentes de IA baseados em grafos de estado. Os exemplos usam **Claude** (Anthropic) como LLM.
+Repositório de estudo didático sobre **LangGraph**, cobrindo **TypeScript** e **Python**. Os exemplos usam **Claude** (Anthropic) como LLM.
 
 ## O que é LangGraph?
 
@@ -10,214 +10,127 @@ LangGraph é uma biblioteca que permite construir aplicações de IA como **graf
 - **Edges (Arestas)** definem o fluxo entre os nós (podendo ser condicionais)
 - **State (Estado)** é um objeto compartilhado que trafega por todo o grafo
 
-Isso permite criar desde pipelines simples até sistemas multi-agente complexos com suporte a ferramentas, roteamento dinâmico e revisão humana.
-
-```
-         ┌─────────────────────────────────────────┐
-         │              LANGGRAPH                  │
-         │                                         │
-         │   START → [nó A] → [nó B] → [nó C] → END │
-         │                  ↑     │               │
-         │                  └─────┘ (loop)        │
-         └─────────────────────────────────────────┘
-```
-
 ## Estrutura do Repositório
 
 ```
-src/
-├── 01-basic-graph/          # Conceito fundamental: nodes, edges e state
-├── 02-state-management/     # Reducers, defaults e tipos complexos de estado
-├── 03-conditional-edges/    # Roteamento dinâmico baseado no estado
-├── 04-tool-calling/         # Agente com ferramentas (padrão ReAct)
-├── 05-multi-agent/          # Múltiplos agentes com supervisor
-└── 06-human-in-the-loop/    # Interrupção e revisão humana
+langgraphjs-demo/
+├── typescript-samples/   # 6 módulos progressivos em TypeScript
+├── python-samples/       # 6 módulos equivalentes em Python
+└── challenges/           # Desafios práticos com testes automatizados
+    ├── typescript/
+    └── python/
 ```
 
 ## Pré-requisitos
 
-- Node.js 18+
-- Chave de API da Anthropic ([obter aqui](https://console.anthropic.com/))
+- **Node.js 18+** (para TypeScript)
+- **Python 3.11+** (para Python)
+- **Chave de API da Anthropic** (módulos 04–06 e challenges bônus)
 
 ## Configuração
 
 ```bash
-# 1. Instalar dependências
-npm install
-
-# 2. Configurar variáveis de ambiente
+# 1. Configure o .env na raiz do repositório
 cp .env.example .env
-# Edite o .env e adicione sua ANTHROPIC_API_KEY
+# Edite o .env e adicione: ANTHROPIC_API_KEY=sk-ant-...
 ```
 
-## Como Executar
-
-Cada módulo é independente e pode ser executado separadamente:
+### TypeScript
 
 ```bash
-npm run 01:basic-graph        # Não requer API key
-npm run 02:state-management   # Não requer API key
-npm run 03:conditional-edges  # Não requer API key
-npm run 04:tool-calling       # Requer ANTHROPIC_API_KEY
-npm run 05:multi-agent        # Requer ANTHROPIC_API_KEY
-npm run 06:human-in-the-loop  # Requer ANTHROPIC_API_KEY (interativo)
+cd typescript-samples
+npm install
+npm run 01:basic-graph        # Sem API key
+npm run 02:state-management   # Sem API key
+npm run 03:conditional-edges  # Sem API key
+npm run 04:tool-calling       # Requer API key
+npm run 05:multi-agent        # Requer API key
+npm run 06:human-in-the-loop  # Requer API key (interativo)
+```
+
+### Python
+
+```bash
+cd python-samples
+pip install -r requirements.txt
+python src/m01_basic_graph.py        # Sem API key
+python src/m02_state_management.py   # Sem API key
+python src/m03_conditional_edges.py  # Sem API key
+python src/m04_tool_calling.py       # Requer API key
+python src/m05_multi_agent.py        # Requer API key
+python src/m06_human_in_the_loop.py  # Requer API key (interativo)
 ```
 
 ---
 
 ## Módulos
 
-### 01 — Grafo Básico
+| # | Conceito | LLM? | TypeScript | Python |
+|---|----------|------|-----------|--------|
+| 01 | Grafo básico — nodes, edges, state | Não | `src/01-basic-graph/` | `src/m01_basic_graph.py` |
+| 02 | State management — reducers | Não | `src/02-state-management/` | `src/m02_state_management.py` |
+| 03 | Conditional edges — roteamento | Não | `src/03-conditional-edges/` | `src/m03_conditional_edges.py` |
+| 04 | Tool calling — padrão ReAct | Sim | `src/04-tool-calling/` | `src/m04_tool_calling.py` |
+| 05 | Multi-agent — supervisor pattern | Sim | `src/05-multi-agent/` | `src/m05_multi_agent.py` |
+| 06 | Human-in-the-loop — interrupt/resume | Sim | `src/06-human-in-the-loop/` | `src/m06_human_in_the_loop.py` |
 
-**Conceitos:** `StateGraph`, `Annotation`, `addNode`, `addEdge`, `START`, `END`
+### Diferenças entre TypeScript e Python
 
-O módulo mais fundamental. Mostra como construir um grafo sem LLM, focando na estrutura:
-
-```typescript
-const grafo = new StateGraph(MeuState)
-  .addNode("passo1", funcaoPasso1)
-  .addNode("passo2", funcaoPasso2)
-  .addEdge(START, "passo1")
-  .addEdge("passo1", "passo2")
-  .addEdge("passo2", END)
-  .compile();
-
-const resultado = await grafo.invoke({ textoOriginal: "hello world" });
-```
-
----
-
-### 02 — Gerenciamento de Estado
-
-**Conceitos:** Reducers customizados, acumulação de arrays, merge de objetos, valores default
-
-O estado é o coração do LangGraph. Este módulo mostra como controlá-lo com precisão:
-
-```typescript
-const Estado = Annotation.Root({
-  // Último valor vence (padrão)
-  status: Annotation<string>,
-
-  // Array acumulativo — cada nó adiciona itens sem sobrescrever
-  logs: Annotation<string[]>({
-    reducer: (atual, novas) => [...(atual ?? []), ...novas],
-    default: () => [],
-  }),
-
-  // Objeto com merge — permite atualizações parciais
-  resumo: Annotation<Record<string, unknown>>({
-    reducer: (atual, novo) => ({ ...(atual ?? {}), ...novo }),
-    default: () => ({}),
-  }),
-});
-```
+| Conceito | TypeScript | Python |
+|----------|-----------|--------|
+| Estado | `Annotation.Root({})` | `TypedDict` + `Annotated[tipo, reducer]` |
+| Reducer de lista | `Annotation<T[]>({ reducer: (a,b) => [...a,...b] })` | `Annotated[list, operator.add]` |
+| Reducer de dict | `Annotation<Record>({ reducer: (a,b) => ({...a,...b}) })` | `Annotated[dict, merge_dict]` |
+| Nomes dos métodos | `addNode`, `addEdge`, `addConditionalEdges` | `add_node`, `add_edge`, `add_conditional_edges` |
+| Ferramentas | `tool(fn, { schema: z.object({...}) })` | `@tool` decorator + type hints |
+| LLM bind | `.bindTools(tools)` | `.bind_tools(tools)` |
+| Saída estruturada | `.withStructuredOutput(zodSchema)` | `.with_structured_output(PydanticModel)` |
+| Interrupt/resume | `interrupt()` / `new Command({ resume })` | `interrupt()` / `Command(resume=)` |
+| Checkpointer | `MemorySaver` (compile arg) | `MemorySaver` (compile arg) |
 
 ---
 
-### 03 — Conditional Edges
+## Challenges
 
-**Conceitos:** `addConditionalEdges`, funções de roteamento, grafos ramificados
+Desafios práticos para consolidar o aprendizado. Cada desafio tem:
+- Um **esqueleto** com `TODO`s para implementar
+- **Testes automatizados** para validar a solução
+- **Exercícios bônus** com LLM real (challenges 03 e 04)
 
-O roteamento dinâmico é o que transforma pipelines lineares em grafos inteligentes:
+```bash
+# TypeScript
+cd challenges/typescript
+npm install
+npm test              # Roda todos os testes
 
-```typescript
-function rotear(estado: Estado): "caminhoA" | "caminhoB" | "caminhoC" {
-  if (estado.urgente) return "caminhoA";
-  if (estado.tecnico) return "caminhoB";
-  return "caminhoC";
-}
-
-grafo.addConditionalEdges("triagem", rotear, {
-  caminhoA: "tratarUrgente",
-  caminhoB: "tratarTecnico",
-  caminhoC: "tratarGeral",
-});
+# Python
+cd challenges/python
+pip install -r requirements.txt
+pytest                # Roda todos os testes
 ```
+
+Veja [challenges/README.md](challenges/README.md) para detalhes de cada desafio.
 
 ---
 
-### 04 — Tool Calling (Padrão ReAct)
-
-**Conceitos:** `tool()`, `ToolNode`, `bindTools`, loop Reasoning→Acting
-
-O padrão ReAct permite que o LLM use ferramentas para resolver problemas:
+## Diagrama de Complexidade
 
 ```
-                    ┌─────────────────────────────┐
-                    │        Padrão ReAct          │
-                    │                              │
-  Pergunta ──→ [agente] ──→ chama ferramenta       │
-                  ↑    ←── resultado da ferramenta │
-                  └─── raciocina sobre resultado   │
-                  └─── (repete até ter resposta)   │
-                  └──→ resposta final              │
-                    └─────────────────────────────┘
-```
-
----
-
-### 05 — Multi-Agent
-
-**Conceitos:** Padrão Supervisor, agentes especializados, estado compartilhado
-
-O padrão de orquestração mais poderoso: um supervisor delega tarefas para agentes especializados:
-
-```
-  Tarefa → [Supervisor] → [Analista] → [Supervisor] → [Redator] → [Supervisor] → FIM
-                              ↑               ↑              ↑
-                         especialista    avalia resultado  especialista
-                         em dados        do analista       em texto
-```
-
----
-
-### 06 — Human-in-the-Loop
-
-**Conceitos:** `interrupt()`, `Command({ resume })`, `MemorySaver`, `thread_id`
-
-Permite pausar o grafo e aguardar input humano antes de continuar:
-
-```typescript
-// No nó — pausa o grafo
-const decisaoHumana = interrupt("Deseja aprovar? (sim/não)");
-
-// Para retomar — em outro invoke()
-await grafo.invoke(
-  new Command({ resume: "sim" }),
-  { configurable: { thread_id: "minha-sessao" } }
-);
-```
-
----
-
-## Diagrama Geral de Complexidade
-
-```
-Módulo 01 ──── Grafo puro (sem LLM)
+Módulo 01 ── Grafo puro (sem LLM)
     │
-Módulo 02 ──── + Estado avançado
+Módulo 02 ── + Estado avançado (reducers)
     │
-Módulo 03 ──── + Roteamento condicional
+Módulo 03 ── + Roteamento condicional
     │
-Módulo 04 ──── + LLM + Ferramentas
+Módulo 04 ── + LLM + Ferramentas (ReAct)
     │
-Módulo 05 ──── + Múltiplos agentes
+Módulo 05 ── + Múltiplos agentes (Supervisor)
     │
-Módulo 06 ──── + Revisão humana
+Módulo 06 ── + Revisão humana (interrupt/resume)
 ```
-
-## Dependências Principais
-
-| Pacote | Função |
-|---|---|
-| `@langchain/langgraph` | Framework de grafos de estado |
-| `@langchain/anthropic` | Integração com Claude (Anthropic) |
-| `@langchain/core` | Tipos base (Messages, Tools, etc.) |
-| `zod` | Schema validation para ferramentas |
-| `dotenv` | Variáveis de ambiente |
 
 ## Recursos
 
-- [Documentação oficial do LangGraph.js](https://langchain-ai.github.io/langgraphjs/)
-- [LangGraph Academy](https://academy.langchain.com/)
+- [Documentação LangGraph.js](https://langchain-ai.github.io/langgraphjs/)
+- [Documentação LangGraph Python](https://langchain-ai.github.io/langgraph/)
 - [Anthropic Console](https://console.anthropic.com/)
