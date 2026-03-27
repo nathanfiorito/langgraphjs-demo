@@ -186,7 +186,7 @@ def criar_grafo(llm: LLMInterface):
     # TODO: monte e retorne o grafo compilado com o loop ReAct
     return (
         StateGraph(AgenteState)
-        .add_node("agente", criar_no_agente)
+        .add_node("agente", criar_no_agente(llm))
         .add_node("executar_tools", ToolNode(ferramentas))
         .add_edge(START, "agente")
         .add_conditional_edges("agente", verificar_proximo_passo)
