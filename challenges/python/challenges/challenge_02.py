@@ -82,7 +82,27 @@ def classificar(estado: NotificacaoState) -> dict:
 
 def rotear(estado: NotificacaoState) -> Canal:
     # TODO: implemente o roteamento baseado em urgencia + tipo
-    raise NotImplementedError("TODO: implemente a função rotear")
+    canal: Canal
+
+    if estado["urgencia"] == "urgente":
+        if estado["tipo"] == "sistema":
+            canal = "incidente"
+        elif estado["tipo"] == "negocio":
+            canal = "escalada"
+        else:
+            canal = "urgencia"
+    else:
+        if estado["tipo"] == "sistema":
+            canal = "tecnico"
+        elif estado["tipo"] == "negocio":
+            canal = "comercial"
+        else:
+            canal = "padrao"
+            
+    print(f"\n🔀 [router] Roteando para: {canal}")
+    return canal
+
+    
 
 
 # ─────────────────────────────────────────────
@@ -98,32 +118,62 @@ def rotear(estado: NotificacaoState) -> Canal:
 
 def handle_incidente(estado: NotificacaoState) -> dict:
     # TODO: canal "incidente" — alertar equipe de plantão + oncall
-    raise NotImplementedError("TODO: implemente handle_incidente")
+    return {
+        "canal": "incidente",
+        "destinatarios": ["plantao@aicompany.com.br", "oncall@aicompany.com.br"],
+        "enviado": True,
+        "timestamp_envio": datetime.now().isoformat()
+    }
 
 
 def handle_escalada(estado: NotificacaoState) -> dict:
     # TODO: canal "escalada" — alertar diretoria + gerentes
-    raise NotImplementedError("TODO: implemente handle_escalada")
+    return {
+        "canal": "escalada",
+        "destinatarios": ["diretoria@aicompany.com.br", "gerentes@aicompany.com.br"],
+        "enviado": True,
+        "timestamp_envio": datetime.now().isoformat()
+    }
 
 
 def handle_urgencia(estado: NotificacaoState) -> dict:
     # TODO: canal "urgencia" — equipe geral de urgência
-    raise NotImplementedError("TODO: implemente handle_urgencia")
+    return {
+        "canal": "urgencia",
+        "destinatarios": ["urgencia@aicompany.com.br"],
+        "enviado": True,
+        "timestamp_envio": datetime.now().isoformat()
+    }
 
 
 def handle_tecnico(estado: NotificacaoState) -> dict:
     # TODO: canal "tecnico" — equipe técnica
-    raise NotImplementedError("TODO: implemente handle_tecnico")
+    return {
+        "canal": "tecnico",
+        "destinatarios": ["tecnica@aicompany.com.br"],
+        "enviado": True,
+        "timestamp_envio": datetime.now().isoformat()
+    }
 
 
 def handle_comercial(estado: NotificacaoState) -> dict:
     # TODO: canal "comercial" — equipe comercial
-    raise NotImplementedError("TODO: implemente handle_comercial")
+    return {
+        "canal": "comercial",
+        "destinatarios": ["comercial@aicompany.com.br"],
+        "enviado": True,
+        "timestamp_envio": datetime.now().isoformat()
+    }
 
 
 def handle_padrao(estado: NotificacaoState) -> dict:
     # TODO: canal "padrao" — fila de notificações padrão
-    raise NotImplementedError("TODO: implemente handle_padrao")
+    return {
+        "canal": "padrao",
+        "destinatarios": ["padrao@aicompany.com.br"],
+        "enviado": True,
+        "timestamp_envio": datetime.now().isoformat()
+    }
 
 
 # ─────────────────────────────────────────────
@@ -146,4 +196,37 @@ def registrar_envio(estado: NotificacaoState) -> dict:
 
 def criar_grafo():
     # TODO: monte e retorne o grafo compilado
-    raise NotImplementedError("TODO: monte o grafo")
+    return (
+        StateGraph(NotificacaoState)
+        .add_node("classificar", classificar)
+        .add_node("handle_incidente", handle_incidente)
+        .add_node("handle_escalada", handle_escalada)
+        .add_node("handle_urgencia", handle_urgencia)
+        .add_node("handle_tecnico", handle_tecnico)
+        .add_node("handle_comercial", handle_comercial)
+        .add_node("handle_padrao", handle_padrao)
+        .add_node("registrar_envio", registrar_envio)
+
+        .add_edge(START, "classificar")
+
+        .add_conditional_edges("classificar", rotear, {
+            "incidente": "handle_incidente",
+            "escalada": "handle_escalada",
+            "urgencia": "handle_urgencia",
+            "tecnico": "handle_tecnico",
+            "comercial": "handle_comercial",
+            "padrao": "handle_padrao",
+        })
+
+        .add_edge("handle_incidente", "registrar_envio")
+        .add_edge("handle_escalada", "registrar_envio")
+        .add_edge("handle_urgencia", "registrar_envio")
+        .add_edge("handle_tecnico", "registrar_envio")
+        .add_edge("handle_comercial", "registrar_envio")
+        .add_edge("handle_padrao", "registrar_envio")
+        .add_edge("registrar_envio", END)
+        .compile()
+
+    )
+
+
