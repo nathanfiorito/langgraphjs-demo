@@ -29,15 +29,29 @@
  *               │
  *           NÃO → END
  *
- * TESTES:
- * Os testes usam um LLM MOCKADO que simula respostas predefinidas.
- * Você não precisa de ANTHROPIC_API_KEY para rodar os testes.
+ * COMO OS MOCKS FUNCIONAM:
  *
- * 🎯 BÔNUS (opcional, requer ANTHROPIC_API_KEY):
- * Depois de passar nos testes com o mock, substitua o llmMock pelo Claude real:
- *   import { ChatAnthropic } from "@langchain/anthropic";
- *   const modelo = new ChatAnthropic({ model: "claude-haiku-4-5-20251001" }).bindTools(ferramentas);
- * E teste com perguntas reais de matemática.
+ * Os testes não chamam a API real — eles injetam um objeto LLMMock que
+ * implementa a mesma interface (LLMInterface) que um LLM real usaria.
+ *
+ * ┌─ Nos testes (tests/challenge-03.test.ts) ──────────────────────────────┐
+ * │  class LLMMock implements LLMInterface {                                │
+ * │    async invoke(_messages): Promise<AIMessage> {                        │
+ * │      return this.respostas[this.indice];  // resposta predefinida       │
+ * │    }                                                                    │
+ * │  }                                                                      │
+ * │                                                                         │
+ * │  const mock = new LLMMock([                                             │
+ * │    criarToolCall("somar", { a: 3, b: 4 }),      // 1ª chamada: usa tool│
+ * │    new AIMessage({ content: "O resultado é 7" }),// 2ª chamada: encerra │
+ * │  ]);                                                                    │
+ * │  const grafo = criarGrafo(mock);  ← mock injetado aqui                 │
+ * └─────────────────────────────────────────────────────────────────────────┘
+ *
+ * Isso permite testar o fluxo do grafo (loop ReAct, acumulação de mensagens,
+ * roteamento) sem depender de API key ou de respostas não-determinísticas.
+ *
+ * Quando você quiser usar o LLM real, basta trocar o mock — o grafo não muda.
  *
  * INSTRUÇÕES:
  *   1. Implemente o nó "agente" que chama o LLM
@@ -153,19 +167,34 @@ export function criarGrafo(llm: LLMInterface) {
 }
 
 // ─────────────────────────────────────────────
-// 🎯 BÔNUS: Use com Claude real (requer ANTHROPIC_API_KEY)
+// 🎯 BÔNUS: Substituir o mock pelo Claude real
 // ─────────────────────────────────────────────
+//
+// Depois de passar nos testes com o mock, você pode rodar com o LLM real.
+// O ChatAnthropic com .bindTools() já tem o método .invoke(), então ele
+// satisfaz a LLMInterface diretamente — nenhum wrapper necessário.
+//
+// Passos:
+//   1. Copie o bloco abaixo para um arquivo separado (ex: runBonus03.ts)
+//   2. Certifique-se de ter ANTHROPIC_API_KEY no arquivo .env na raiz do repo
+//   3. Execute: npx tsx runBonus03.ts
 //
 // import "dotenv/config";
 // import { ChatAnthropic } from "@langchain/anthropic";
+// import { HumanMessage } from "@langchain/core/messages";
+// import { criarGrafo, ferramentas } from "./challenges/challenge-03.js";
 //
+// // bindTools() vincula as ferramentas ao modelo — ele saberá quando chamá-las
 // const claudeReal = new ChatAnthropic({
 //   model: "claude-haiku-4-5-20251001",
 //   temperature: 0,
 // }).bindTools(ferramentas);
 //
-// const grafoReal = criarGrafo(claudeReal as LLMInterface);
+// // Mesma função criarGrafo dos testes — só o argumento muda
+// const grafoReal = criarGrafo(claudeReal as any);
+//
 // const resultado = await grafoReal.invoke({
 //   messages: [new HumanMessage("Quanto é (3 + 4) elevado ao quadrado?")],
 // });
 // console.log(resultado.messages[resultado.messages.length - 1].content);
+// // Esperado: algo como "O resultado é 49"

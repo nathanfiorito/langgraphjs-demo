@@ -29,14 +29,27 @@ FLUXO DO GRAFO (ReAct):
               │
           NÃO → END
 
-TESTES:
-Os testes usam um LLM MOCKADO que simula respostas predefinidas.
-Você não precisa de ANTHROPIC_API_KEY para rodar os testes.
+COMO OS MOCKS FUNCIONAM:
 
-🎯 BÔNUS (opcional, requer ANTHROPIC_API_KEY):
-Depois de passar nos testes, substitua o mock pelo Claude real:
-  from langchain_anthropic import ChatAnthropic
-  modelo_real = ChatAnthropic(model="claude-haiku-4-5-20251001").bind_tools(ferramentas)
+  Os testes não chamam a API real — eles injetam um objeto LLMMock que
+  implementa a mesma interface (LLMInterface) que um LLM real usaria.
+
+  ┌─ Nos testes (tests/test_challenge_03.py) ──────────────────────────────┐
+  │  class LLMMock:                                                          │
+  │      async def ainvoke(self, messages) -> AIMessage:                     │
+  │          return self.respostas[self.indice]   # resposta predefinida     │
+  │                                                                          │
+  │  mock = LLMMock([                                                        │
+  │      criar_tool_call("somar", {"a": 3, "b": 4}),   # 1ª chamada: usa   │
+  │      AIMessage(content="O resultado é 7"),          # 2ª chamada: encerra│
+  │  ])                                                                      │
+  │  grafo = criar_grafo(mock)  ← mock injetado aqui                        │
+  └──────────────────────────────────────────────────────────────────────────┘
+
+  Isso permite testar o fluxo do grafo (loop ReAct, acumulação de mensagens,
+  roteamento) sem depender de API key ou de respostas não-determinísticas.
+
+  Quando você quiser usar o LLM real, basta trocar o mock — o grafo não muda.
 
 INSTRUÇÕES:
   1. Implemente o nó "agente" que chama o LLM
@@ -102,7 +115,8 @@ ferramentas = [somar, multiplicar, potencia]
 #
 
 class AgenteState(TypedDict):
-    pass  # TODO: adicione o campo messages com add_messages como reducer
+    # TODO: adicione o campo messages com add_messages como reducer
+    messages: Annotated[list[BaseMessage], add_messages]
 
 
 # ─────────────────────────────────────────────
@@ -128,7 +142,18 @@ class LLMInterface(Protocol):
 def criar_no_agente(llm: LLMInterface):
     async def agente(estado: AgenteState) -> dict:
         # TODO: implemente o nó agente
-        raise NotImplementedError("TODO: implemente o nó agente")
+        
+        resposta = await llm.ainvoke(estado["messages"])
+
+        tool_calls = getattr(resposta, "tool_calls", [])
+        if tool_calls:
+            nomes = [t["name"] for t in tool_calls]
+            print(f"   → Solicitando ferramenta(s): {', '.join(nomes)}")
+        else:
+            print("   → Respondendo diretamente ao usuário")
+
+        return {"messages": [resposta]}
+
     return agente
 
 
@@ -143,7 +168,11 @@ def criar_no_agente(llm: LLMInterface):
 
 def verificar_proximo_passo(estado: AgenteState) -> str:
     # TODO: implemente a verificação de tool_calls
-    raise NotImplementedError("TODO: implemente verificar_proximo_passo")
+    ultima_mensagem = estado["messages"][-1]
+    tool_calls = getattr(ultima_mensagem, "tool_calls", [])
+    if tool_calls:
+        return "executar_tools"
+    return END
 
 
 # ─────────────────────────────────────────────
@@ -155,25 +184,45 @@ def verificar_proximo_passo(estado: AgenteState) -> str:
 
 def criar_grafo(llm: LLMInterface):
     # TODO: monte e retorne o grafo compilado com o loop ReAct
-    raise NotImplementedError("TODO: monte o grafo")
+    return (
+        StateGraph(AgenteState)
+        .add_node("agente", criar_no_agente)
+        .add_node("executar_tools", ToolNode(ferramentas))
+        .add_edge(START, "agente")
+        .add_conditional_edges("agente", verificar_proximo_passo)
+        .add_edge("executar_tools", "agente")
+        .compile()
+    )
 
 
 # ─────────────────────────────────────────────
-# 🎯 BÔNUS: Use com Claude real (requer ANTHROPIC_API_KEY)
+# 🎯 BÔNUS: Substituir o mock pelo Claude real
 # ─────────────────────────────────────────────
+#
+# Depois de passar nos testes com o mock, você pode rodar com o LLM real.
+# O ChatAnthropic com .bind_tools() já implementa a interface LLMInterface
+# (tem o método .ainvoke), então é só trocar na chamada de criar_grafo().
+#
+# Passos:
+#   1. Copie o bloco abaixo para um arquivo separado (ex: run_bonus_03.py)
+#   2. Certifique-se de ter ANTHROPIC_API_KEY no arquivo .env na raiz do repo
+#   3. Execute: python run_bonus_03.py
 #
 # import asyncio
 # from pathlib import Path
 # from dotenv import load_dotenv
 # from langchain_anthropic import ChatAnthropic
 # from langchain_core.messages import HumanMessage
+# from challenges.challenge_03 import criar_grafo, ferramentas
 #
-# load_dotenv(dotenv_path=Path(__file__).parents[2] / ".env")
+# load_dotenv(dotenv_path=Path(__file__).parents[0] / ".env")
 #
+# # bind_tools() vincula as ferramentas ao modelo — ele saberá quando chamá-las
 # modelo_real = ChatAnthropic(
 #     model="claude-haiku-4-5-20251001", temperature=0
 # ).bind_tools(ferramentas)
 #
+# # Mesma função criar_grafo dos testes — só o argumento muda
 # grafo_real = criar_grafo(modelo_real)
 #
 # async def main():
@@ -181,6 +230,7 @@ def criar_grafo(llm: LLMInterface):
 #         "messages": [HumanMessage(content="Quanto é (3 + 4) elevado ao quadrado?")]
 #     })
 #     print(resultado["messages"][-1].content)
+#     # Esperado: algo como "O resultado é 49"
 #
 # if __name__ == "__main__":
 #     asyncio.run(main())

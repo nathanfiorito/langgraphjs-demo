@@ -31,17 +31,31 @@
  *                                       → [formatador] ──→ [supervisor]
  *                                       → [publicador] ──→ END
  *
- * TESTES:
- * Os testes verificam tanto o fluxo correto quanto a correção pelo guardrail.
+ * COMO OS MOCKS FUNCIONAM:
+ *
+ * Os testes injetam diferentes implementações de SupervisorInterface para
+ * verificar tanto o fluxo correto quanto a robustez do guardrail:
+ *
+ * ┌─ criarSupervisorCorreto ───────────────────────────────────────────────┐
+ * │  Toma decisões na ordem certa: revisor → formatador → publicador       │
+ * │  Verifica que o pipeline completo funciona normalmente                 │
+ * └────────────────────────────────────────────────────────────────────────┘
+ *
+ * ┌─ criarSupervisorMalicioso ─────────────────────────────────────────────┐
+ * │  Sempre retorna "publicador" — tenta pular todas as etapas             │
+ * │  Verifica que o guardrail CORRIGE a decisão errada                     │
+ * └────────────────────────────────────────────────────────────────────────┘
+ *
+ * O ponto-chave: o guardrail em rotearSupervisor() é DETERMINÍSTICO.
+ * Ele sempre prevalece sobre o que o supervisor (mock ou real) decidiu.
+ * Assim, mesmo um LLM real que "alucine" uma ordem errada será corrigido.
  *
  * 🎯 BÔNUS (opcional, requer ANTHROPIC_API_KEY):
- * Substitua o supervisorMock pelo Claude real usando withStructuredOutput:
- *   import { ChatAnthropic } from "@langchain/anthropic";
- *   import { z } from "zod";
- *   const llm = new ChatAnthropic({ model: "claude-haiku-4-5-20251001" });
- *   const supervisorReal = llm.withStructuredOutput(z.object({
- *     proximo: z.enum(["revisor", "formatador", "publicador"]),
- *   }));
+ *
+ * O withStructuredOutput() faz o Claude retornar JSON validado pelo schema Zod,
+ * mas ele não tem o método .decidir() da SupervisorInterface.
+ * Por isso, criamos um wrapper fino que adapta a interface.
+ * Veja o exemplo completo no bloco comentado ao final do arquivo.
  *
  * INSTRUÇÕES:
  *   1. Implemente rotearSupervisor() com os guardrails
@@ -150,3 +164,57 @@ export function criarGrafo(supervisor: SupervisorInterface) {
   // TODO: monte e retorne o grafo compilado com checkpointer
   throw new Error("TODO: monte o grafo");
 }
+
+// ─────────────────────────────────────────────
+// 🎯 BÔNUS: Substituir o mock pelo Claude real
+// ─────────────────────────────────────────────
+//
+// Depois de passar nos testes, você pode trocar o supervisor mock pelo Claude.
+//
+// O withStructuredOutput() garante que o LLM retorne JSON no schema Zod certo,
+// mas o retorno é o objeto diretamente — não tem o método .decidir().
+// Por isso criamos um wrapper (SupervisorReal) que adapta a interface.
+//
+// Passos:
+//   1. Copie o bloco abaixo para um arquivo separado (ex: runBonus04.ts)
+//   2. Certifique-se de ter ANTHROPIC_API_KEY no arquivo .env na raiz do repo
+//   3. Execute: npx tsx runBonus04.ts
+//
+// import "dotenv/config";
+// import { ChatAnthropic } from "@langchain/anthropic";
+// import { z } from "zod";
+// import { criarGrafo, SupervisorInterface, Estado } from "./challenges/challenge-04.js";
+//
+// const DecisaoSchema = z.object({
+//   proximo: z.enum(["revisor", "formatador", "publicador"]),
+//   motivo: z.string(),
+// });
+//
+// // Wrapper que adapta o LLM estruturado à SupervisorInterface
+// class SupervisorReal implements SupervisorInterface {
+//   private chain = new ChatAnthropic({
+//     model: "claude-haiku-4-5-20251001",
+//   }).withStructuredOutput(DecisaoSchema);
+//
+//   async decidir(estado: Estado) {
+//     const prompt = `
+//       Você é um supervisor de publicação. Decida o próximo passo.
+//       Estado: revisao="${estado.revisao ?? ""}", formatacao="${estado.formatacao ?? ""}"
+//       Escolha: revisor, formatador ou publicador.
+//     `;
+//     // withStructuredOutput retorna o objeto Zod validado diretamente
+//     return await this.chain.invoke(prompt);
+//   }
+// }
+//
+// // Mesma função criarGrafo dos testes — só o argumento muda
+// const grafoReal = criarGrafo(new SupervisorReal());
+//
+// const config = { configurable: { thread_id: "bonus-01" } };
+// const resultado = await grafoReal.invoke(
+//   { conteudoOriginal: "Artigo sobre LangGraph e guardrails", historico: [] },
+//   config
+// );
+// console.log("Publicado:", resultado.publicado);
+// console.log("URL:", resultado.urlPublicacao);
+// console.log("Histórico:", resultado.historico);

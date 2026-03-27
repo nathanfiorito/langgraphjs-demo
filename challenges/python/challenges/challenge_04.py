@@ -23,17 +23,32 @@ REGRAS DO GUARDRAIL (implemente em rotear_supervisor):
   - Se ambas preenchidas → ir para "publicador"
   - NUNCA ir para "publicador" se `formatacao` estiver vazia
 
+COMO OS MOCKS FUNCIONAM:
+
+  Os testes injetam diferentes implementações de SupervisorInterface para
+  verificar tanto o fluxo correto quanto a robustez do guardrail:
+
+  ┌─ SupervisorCorreto ─────────────────────────────────────────────────────┐
+  │  Toma decisões na ordem certa: revisor → formatador → publicador        │
+  │  Verifica que o pipeline completo funciona normalmente                  │
+  └──────────────────────────────────────────────────────────────────────────┘
+
+  ┌─ SupervisorMalicioso ───────────────────────────────────────────────────┐
+  │  Sempre retorna "publicador" — tenta pular todas as etapas              │
+  │  Verifica que o guardrail CORRIGE a decisão errada                      │
+  └──────────────────────────────────────────────────────────────────────────┘
+
+  O ponto-chave: o guardrail em rotear_supervisor() é DETERMINÍSTICO.
+  Ele sempre prevalece sobre o que o supervisor (mock ou real) decidiu.
+  Assim, mesmo um LLM real que "alucine" uma ordem errada será corrigido.
+
 🎯 BÔNUS (opcional, requer ANTHROPIC_API_KEY):
-Substitua o supervisor mock pelo Claude real usando with_structured_output:
-  from langchain_anthropic import ChatAnthropic
-  from pydantic import BaseModel
-  from typing import Literal
 
-  class Decisao(BaseModel):
-      proximo: Literal["revisor", "formatador", "publicador"]
+  O with_structured_output() faz o Claude retornar JSON validado pelo schema
+  Pydantic — mas ele não tem o método .decidir() da SupervisorInterface.
+  Por isso, criamos um wrapper fino que adapta a interface.
 
-  llm = ChatAnthropic(model="claude-haiku-4-5-20251001")
-  supervisor_real = llm.with_structured_output(Decisao)
+  Veja o exemplo completo no bloco comentado ao final do arquivo.
 
 INSTRUÇÕES:
   1. Implemente rotear_supervisor() com os guardrails
@@ -139,3 +154,65 @@ def criar_grafo(supervisor: SupervisorInterface):
     checkpointer = MemorySaver()
     # TODO: monte e retorne o grafo compilado com checkpointer
     raise NotImplementedError("TODO: monte o grafo")
+
+
+# ─────────────────────────────────────────────
+# 🎯 BÔNUS: Substituir o mock pelo Claude real
+# ─────────────────────────────────────────────
+#
+# Depois de passar nos testes, você pode trocar o supervisor mock pelo Claude.
+#
+# O with_structured_output() garante que o LLM retorne JSON no formato certo,
+# mas o retorno é um objeto Pydantic — não tem o método .decidir().
+# Por isso criamos um wrapper (SupervisorReal) que adapta a interface.
+#
+# Passos:
+#   1. Copie o bloco abaixo para um arquivo separado (ex: run_bonus_04.py)
+#   2. Certifique-se de ter ANTHROPIC_API_KEY no arquivo .env na raiz do repo
+#   3. Execute: python run_bonus_04.py
+#
+# import asyncio
+# from pathlib import Path
+# from dotenv import load_dotenv
+# from typing import Literal
+# from pydantic import BaseModel
+# from langchain_anthropic import ChatAnthropic
+# from challenges.challenge_04 import criar_grafo, PublicacaoState
+#
+# load_dotenv(dotenv_path=Path(__file__).parents[0] / ".env")
+#
+# class Decisao(BaseModel):
+#     proximo: Literal["revisor", "formatador", "publicador"]
+#     motivo: str
+#
+# # Wrapper que adapta o LLM estruturado à SupervisorInterface
+# class SupervisorReal:
+#     def __init__(self):
+#         llm = ChatAnthropic(model="claude-haiku-4-5-20251001")
+#         # with_structured_output garante saída no formato de Decisao
+#         self._chain = llm.with_structured_output(Decisao)
+#
+#     async def decidir(self, estado: PublicacaoState) -> dict:
+#         prompt = f"""
+#         Você é um supervisor de publicação. Decida o próximo passo.
+#         Estado: revisao="{estado.get('revisao', '')}", formatacao="{estado.get('formatacao', '')}"
+#         Escolha: revisor, formatador ou publicador.
+#         """
+#         decisao = await self._chain.ainvoke(prompt)
+#         return {"proximo": decisao.proximo, "motivo": decisao.motivo}
+#
+# # Mesma função criar_grafo dos testes — só o argumento muda
+# grafo_real = criar_grafo(SupervisorReal())
+#
+# async def main():
+#     config = {"configurable": {"thread_id": "bonus-01"}}
+#     resultado = await grafo_real.ainvoke(
+#         {"conteudo_original": "Artigo sobre LangGraph e guardrails", "historico": []},
+#         config,
+#     )
+#     print("Publicado:", resultado["publicado"])
+#     print("URL:", resultado["url_publicacao"])
+#     print("Histórico:", resultado["historico"])
+#
+# if __name__ == "__main__":
+#     asyncio.run(main())
