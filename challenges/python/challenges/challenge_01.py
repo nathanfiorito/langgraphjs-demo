@@ -65,7 +65,15 @@ def merge_dict(atual: dict, novo: dict) -> dict:
 
 
 class PedidoState(TypedDict):
-    pass  # TODO: adicione os campos aqui
+    itens: Annotated[list[ItemPedido], operator.add]
+    codigo_desconto: str
+    subtotal: float
+    desconto: float
+    frete: float
+    total: float
+    valido: bool
+    erros: Annotated[list[str], operator.add]
+    resumo: Annotated[dict, merge_dict]
 
 
 # ─────────────────────────────────────────────
@@ -81,7 +89,26 @@ class PedidoState(TypedDict):
 
 def validar(estado: PedidoState) -> dict:
     # TODO: implemente a validação
-    raise NotImplementedError("TODO: implemente o nó validar")
+    erros = []
+
+    print("Validando pedido.")
+
+    if not estado["itens"] or len(estado["itens"]) < 1:
+        print("Não existe nenhum Item presente no Pedido.")
+        erros.append("Não existe nenhum Item presente no Pedido.")
+    
+    for item in estado["itens"]:
+        if(item["quantidade"] < 1 or item["preco_unitario"] < 1):
+            print("Quantidade ou Preço Unitário inválido.")
+            erros.append("Quantidade ou Preço Unitário inválido.")
+
+    print("Validação concluída.")
+
+    return {
+        "valido": False if len(erros) > 0 else True,
+        "erros": erros
+    }
+
 
 
 # ─────────────────────────────────────────────
@@ -105,8 +132,34 @@ def validar(estado: PedidoState) -> dict:
 
 def calcular(estado: PedidoState) -> dict:
     # TODO: implemente os cálculos
-    raise NotImplementedError("TODO: implemente o nó calcular")
+    subtotal = 0
+    desconto = 0
+    frete = 0
 
+    print("Calculando subtotal.")
+
+    for item in estado["itens"]:
+        subtotal += item["quantidade"] * item["preco_unitario"]
+
+    print("Calculando desconto.")
+
+    if(estado["codigo_desconto"] == "DESC10"):
+        desconto = subtotal * 0.1
+    elif(estado["codigo_desconto"] == "DESC20"):
+        desconto = subtotal * 0.2
+        
+    print("Calculando frete.")
+    
+    if subtotal < 200:
+        frete = 15
+
+    print("Calculo concluído.")
+
+    return {
+        "subtotal": subtotal,
+        "frete": frete,
+        "desconto": desconto
+    }
 
 # ─────────────────────────────────────────────
 # TODO 4: Implemente o nó "formatar"
@@ -121,7 +174,31 @@ def calcular(estado: PedidoState) -> dict:
 
 def formatar(estado: PedidoState) -> dict:
     # TODO: implemente a formatação
-    raise NotImplementedError("TODO: implemente o nó formatar")
+    total = 0
+    total_itens = 0
+    status = "aprovado"
+
+    print("Formatando resultado final.")
+
+    for item in estado["itens"]:
+        total_itens += item["quantidade"]
+
+    print("Calculando total.")
+
+    total = estado["subtotal"] - estado["desconto"] + estado["frete"]
+
+    if not estado["valido"]:
+        status = "rejeitado"
+
+    print("Formatação concluida.")
+
+    return {
+        "total": total,
+        "resumo": {
+            "status":status, 
+            "total_itens": total_itens
+            }
+    }
 
 
 # ─────────────────────────────────────────────
@@ -133,5 +210,15 @@ def formatar(estado: PedidoState) -> dict:
 #
 
 def criar_grafo():
-    # TODO: crie e retorne o grafo compilado
-    raise NotImplementedError("TODO: monte o grafo")
+    return (
+        StateGraph(PedidoState)
+        .add_node("validar", validar)
+        .add_node("calcular", calcular)
+        .add_node("formatar", formatar)
+
+        .add_edge(START, "validar")
+        .add_edge("validar", "calcular")
+        .add_edge("calcular", "formatar")
+        .add_edge("formatar", END)
+        .compile()
+             )
