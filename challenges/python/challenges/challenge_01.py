@@ -196,7 +196,11 @@ def formatar(estado: PedidoState) -> dict:
         "total": total,
         "resumo": {
             "status":status, 
-            "total_itens": total_itens
+            "total_itens": total_itens,
+            "subtotal": estado["subtotal"],
+            "desconto": estado["desconto"],
+            "frete": estado["frete"],
+            "total": total
             }
     }
 
